@@ -1,0 +1,58 @@
+{
+  "expo": {
+    "name": "Movibot",
+    "slug": "movibot",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "scheme": "movibot",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#FAF7F2",
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "apiUrl": "https://script.google.com/macros/s/AKfycbxT1CnBf_EjRKh3s0AHrUyh2DG9mFU8bUlX8pe_Cu-SS9_qzxExqU0x227a1IbWh0OVhg/exec"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.leonemmanuel.movibot"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#FAF7F2",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.leonemmanuel.movibot",
+      "versionCode": 1
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "androidStatusBar": {
+      "backgroundColor": "#FAF7F2",
+      "barStyle": "dark-content",
+      "translucent": false
+    },
+    "plugins": [
+      "expo-font",
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FAF7F2",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "dark": {
+            "backgroundColor": "#0E0F12",
+            "image": "./assets/splash-icon.png"
+          }
+        }
+      ]
+    ]
+  }
+}
