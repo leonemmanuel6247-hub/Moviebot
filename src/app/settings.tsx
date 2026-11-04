@@ -1,176 +1,37 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
-import { useAuth, type DetailLevel } from '../lib/auth';
-import { useTheme } from '../lib/theme-context';
-import { api } from '../lib/api';
-import { radius, space } from '../theme';
-import type { ThemeMode } from '../theme';
-import { t, type Lang } from '../lib/i18n';
+/* eslint-disable react-hooks/set-state-in-effect -- synchronisation des préférences du compte */
+import React, {useEffect, useState} from 'react';
+import {View, Text, Pressable, ScrollView, TextInput, Switch, StyleSheet, useWindowDimensions} from 'react-native';
+import {Feather} from '@expo/vector-icons';
+import {useRouter} from 'expo-router';
+import {useAuth} from '../lib/auth';
+import {api, type Conversation} from '../lib/api';
+import {useTheme} from '../lib/theme-context';
+import {darkenStyles} from '../lib/dark-styles';
+import type {ThemeMode} from '../theme';
 
-export default function SettingsScreen() {
-  const { user, signOut, setDetailLevel } = useAuth();
-  const { theme, mode, setMode } = useTheme();
-  const router = useRouter();
-  const lang: Lang = 'fr';
-  const [todayTokens, setTodayTokens] = useState(0);
-  const [dailyLimit, setDailyLimit] = useState(2000);
-
-  useEffect(() => {
-    api<{ todayTokens: number; dailyLimit: number }>('usage_mine')
-      .then((d) => {
-        setTodayTokens(d.todayTokens || 0);
-        setDailyLimit(d.dailyLimit || 2000);
-      })
-      .catch(() => {});
-  }, []);
-
-  const remaining = Math.max(0, dailyLimit - todayTokens);
-
-  const themeOptions: { key: ThemeMode; label: string }[] = [
-    { key: 'light', label: t(lang, 'themeLight') },
-    { key: 'dark', label: t(lang, 'themeDark') },
-    { key: 'auto', label: t(lang, 'themeAuto') },
-  ];
-
-  const detailOptions: { key: DetailLevel; label: string }[] = [
-    { key: 'concise', label: t(lang, 'concise') },
-    { key: 'balanced', label: t(lang, 'balanced') },
-    { key: 'detailed', label: t(lang, 'detailed') },
-  ];
-
-  const changeDetail = async (level: DetailLevel) => {
-    setDetailLevel(level);
-    try {
-      await api('update_profile', { detail_level: level });
-    } catch {
-      // ignore
-    }
-  };
-
-  const cardStyle = [styles.card, { backgroundColor: theme.surface, borderColor: theme.border }];
-  const sectionStyle = [styles.sectionTitle, { color: theme.text }];
-
-  return (
-    <ScrollView style={{ flex: 1, backgroundColor: theme.bg }} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} accessibilityLabel="Retour">
-          <Feather name="chevron-left" size={24} color={theme.text} />
-        </Pressable>
-        <Text style={[styles.title, { color: theme.text }]}>{t(lang, 'settings')}</Text>
-        <View style={{ width: 24 }} />
-      </View>
-
-      <Text style={sectionStyle}>{t(lang, 'tokensRemaining')}</Text>
-      <View style={cardStyle}>
-        <View style={styles.row}>
-          <Text style={{ color: theme.text, fontSize: 15 }}>{t(lang, 'tokensRemaining')}</Text>
-          <Text style={{ color: theme.accent, fontSize: 15, fontWeight: '700' }}>
-            {remaining} / {dailyLimit}
-          </Text>
-        </View>
-      </View>
-
-      <Text style={sectionStyle}>{t(lang, 'theme')}</Text>
-      <View style={styles.themeRow}>
-        {themeOptions.map((o) => (
-          <Pressable
-            key={o.key}
-            onPress={() => setMode(o.key)}
-            style={[
-              styles.themeCard,
-              {
-                borderColor: mode === o.key ? theme.accent : theme.border,
-                borderWidth: mode === o.key ? 2 : 1,
-                backgroundColor: theme.surface,
-              },
-            ]}
-          >
-            <View
-              style={[
-                styles.themePreview,
-                { backgroundColor: o.key === 'dark' ? '#0E0F12' : o.key === 'light' ? '#FAF7F2' : theme.surfaceSecondary },
-              ]}
-            >
-              <View style={[styles.themePreviewBar, { backgroundColor: o.key === 'dark' ? '#D4B483' : '#8A6A3B' }]} />
-            </View>
-            <Text style={{ color: theme.text, fontSize: 13 }}>{o.label}</Text>
-          </Pressable>
-        ))}
-      </View>
-
-      <Text style={sectionStyle}>{t(lang, 'detailLevel')}</Text>
-      <View style={cardStyle}>
-        {detailOptions.map((o, i) => (
-          <Pressable
-            key={o.key}
-            onPress={() => changeDetail(o.key)}
-            style={[styles.row, i > 0 && { borderTopWidth: 1, borderTopColor: theme.border }]}
-          >
-            <Text style={{ color: theme.text, fontSize: 15 }}>{o.label}</Text>
-            {user?.detail_level === o.key && <Feather name="check" size={18} color={theme.accent} />}
-          </Pressable>
-        ))}
-      </View>
-
-      <Text style={sectionStyle}>Compte</Text>
-      <View style={cardStyle}>
-        <View style={styles.row}>
-          <Text style={{ color: theme.textSecondary }}>{user?.email}</Text>
-        </View>
-      </View>
-
-      <Pressable
-        onPress={signOut}
-        style={({ pressed }) => [
-          styles.signOut,
-          { borderColor: theme.error, opacity: pressed ? 0.9 : 1 },
-        ]}
-      >
-        <Feather name="log-out" size={18} color={theme.error} />
-        <Text style={{ color: theme.error, fontWeight: '600' }}>{t(lang, 'signOut')}</Text>
-      </Pressable>
-    </ScrollView>
-  );
+type Icon = React.ComponentProps<typeof Feather>['name'];
+type Memory = {memory_id:string; content:string};
+type Preferences = {instructions:string; memories:Memory[]; memoryEnabled:boolean};
+const defaultPrefs: Preferences = {instructions:'', memories:[], memoryEnabled:false};
+const items: {id:string; icon:Icon; label:string}[] = [{id:'general',icon:'sliders',label:'Général'},{id:'personal',icon:'edit-3',label:'Personnalisation'},{id:'memory',icon:'heart',label:'Mémoire'},{id:'data',icon:'shield',label:'Données & confidentialité'},{id:'account',icon:'user',label:'Compte'}];
+export default function Settings() {
+ const router=useRouter(); const {user,signOut,refresh}=useAuth(); const {theme,mode,setMode}=useTheme(); const st=React.useMemo(()=>theme.mode==='dark'?darkenStyles(lightStyles):lightStyles,[theme.mode]); const wide=useWindowDimensions().width>760;
+ const [name,setName]=useState(user?.display_name || ''); const [level,setLevel]=useState(user?.detail_level || 'detailed'); const [usage,setUsage]=useState<{todayTokens:number;dailyLimit:number}|null>(null); const [tab,setTab]=useState('general'); const [prefs,setPrefs]=useState<Preferences>(defaultPrefs); const [draft,setDraft]=useState(''); const [notice,setNotice]=useState(''); const [confirm,setConfirm]=useState(false); const [working,setWorking]=useState(false);
+ useEffect(()=>{let active=true; if(!user){setPrefs(defaultPrefs);return;} setWorking(true); Promise.all([api<{preferences:{instructions:string;memory_enabled:boolean;theme?:ThemeMode}}>('get_preferences'),api<{memories:Memory[]}>('list_memories')]).then(([p,m])=>{if(active){setPrefs({instructions:p.preferences.instructions||'',memoryEnabled:p.preferences.memory_enabled,memories:m.memories||[]});if(p.preferences.theme) setMode(p.preferences.theme);setNotice('');}}).catch(e=>{if(active)setNotice(e instanceof Error?e.message:'Impossible de charger les paramètres.');}).finally(()=>{if(active)setWorking(false)});return()=>{active=false};},[user,setMode]);
+ const save=async(next:Preferences,field:'instructions'|'memory')=>{if(!user||working)return;setWorking(true);setNotice('');try {const result=await api<{preferences:{instructions:string;memory_enabled:boolean}}>('save_preferences',field==='instructions'?{instructions:next.instructions}:{memory_enabled:next.memoryEnabled});setPrefs(prev=>({...prev,instructions:field==='instructions'?(result.preferences.instructions||''):prev.instructions,memoryEnabled:result.preferences.memory_enabled}));setNotice('Paramètres enregistrés sur votre compte.');} catch(e) {setNotice(e instanceof Error?e.message:'Enregistrement impossible.');} finally {setWorking(false);}};
+ const addMemory=async()=>{if(!draft.trim()||!user||working)return;setWorking(true);setNotice('');try{const result=await api<{memory:Memory}>('add_memory',{content:draft.trim()});setPrefs(prev=>({...prev,memories:[...prev.memories,result.memory]}));setDraft('');setNotice('Souvenir enregistré sur votre compte.');}catch(e){setNotice(e instanceof Error?e.message:'Enregistrement impossible.')}finally{setWorking(false)}};
+ const deleteMemory=async(id:string)=>{if(working)return;setWorking(true);setNotice('');try{await api('delete_memory',{memory_id:id});setPrefs(prev=>({...prev,memories:prev.memories.filter(m=>m.memory_id!==id)}));setNotice('Souvenir supprimé.')}catch(e){setNotice(e instanceof Error?e.message:'Suppression impossible.')}finally{setWorking(false)}};
+ const changeTheme=async(m:ThemeMode)=>{if(working)return; if(!user){setMode(m);setNotice('Apparence enregistrée sur cet appareil.');return;}setWorking(true);setNotice('');try{await api('save_preferences',{theme:m});setMode(m);setNotice('Apparence enregistrée sur votre compte.')}catch(e){setNotice(e instanceof Error?e.message:'Enregistrement impossible.')}finally{setWorking(false)}};
+ const saveProfile=async(kind:'name'|'level')=>{if(!user||working||(kind==='name'&&!name.trim()))return;setWorking(true);try{await api('update_profile',kind==='name'?{display_name:name.trim()}:{detail_level:level});await refresh();setNotice('Profil enregistré.')}catch(e){setNotice(e instanceof Error?e.message:'Enregistrement impossible.')}finally{setWorking(false)}};
+ const loadUsage=async()=>{if(!user)return;setWorking(true);try{const data=await api<{todayTokens:number;dailyLimit:number}>('usage_mine');setUsage(data);setNotice('')}catch(e){setNotice(e instanceof Error?e.message:'Statistiques indisponibles.')}finally{setWorking(false)}};
+ const deleteAll=async()=>{setWorking(true);setNotice('');try{const lists=await Promise.all([api<{conversations:Conversation[]}>('list_conversations'),api<{conversations:Conversation[]}>('list_conversations',{archived:true})]);let failed=0;for(const c of lists.flatMap(d=>d.conversations||[])){try{await api('delete_conversation',{conv_id:c.conv_id})}catch{failed++}}setNotice(failed ? `${failed} discussion(s) n’ont pas pu être supprimées.` : 'Toutes les discussions ont été supprimées.');}catch(e){setNotice(e instanceof Error?e.message:'Suppression impossible.')}finally{setWorking(false);setConfirm(false)}};
+ const title=items.find(i=>i.id===tab)?.label;
+ return <View style={st.root}><View style={st.shell}><View style={st.header}><Pressable accessibilityLabel="Retour au chat" onPress={()=>router.canGoBack()?router.back():router.replace('/')} style={st.back}><Feather name="arrow-left" size={19} color="#536987"/></Pressable><View><Text style={st.heading}>Paramètres</Text><Text style={st.sub}>Un espace qui vous ressemble.</Text></View></View><View style={[st.layout,!wide&&{flexDirection:'column'}]}><ScrollView horizontal={!wide} style={wide ? {width:245} : {flexGrow:0}} contentContainerStyle={[st.nav,!wide&&{width:undefined,flexDirection:'row'}]} showsHorizontalScrollIndicator={false}>{items.map(i=><Pressable key={i.id} onPress={()=>{setTab(i.id);setNotice('');setConfirm(false)}} style={[st.navItem,tab===i.id&&st.navActive]}><Feather name={i.icon} size={17} color={tab===i.id?'#2762DF':'#8393AA'}/><Text style={[st.navText,tab===i.id&&{color:'#2762DF'}]}>{i.label}</Text></Pressable>)}</ScrollView><ScrollView style={{flex:1}} contentContainerStyle={st.content} keyboardShouldPersistTaps="handled"><Text style={st.eyebrow}>VOTRE ESPACE</Text><Text style={st.title}>{title}</Text>
+ {tab==='general' && <><Text style={st.desc}>Les essentiels pour une expérience agréable, à votre rythme.</Text><View style={st.card}><Text style={st.cardTitle}>Langue de l’interface</Text><Text style={st.help}>La langue actuellement disponible pour l’application.</Text><View style={st.selected}><Feather name="globe" size={17} color="#2762DF"/><Text style={st.selectedText}>Français</Text><Feather name="check" size={16} color="#2762DF"/></View><Text style={st.micro}>La langue de l’interface est actuellement le français.</Text></View><View style={st.card}><Text style={st.cardTitle}>Apparence</Text><Text style={st.help}>Choisissez votre confort visuel. Le thème suit votre compte lorsque vous êtes connecté.</Text><View style={{flexDirection:'row',flexWrap:'wrap',gap:8}}>{([{id:'light',label:'Clair',icon:'sun'},{id:'dark',label:'Sombre',icon:'moon'},{id:'auto',label:'Système',icon:'monitor'}] as {id:ThemeMode;label:string;icon:Icon}[]).map(option=><Pressable key={option.id} accessibilityRole="button" accessibilityState={{selected:mode===option.id,disabled:working}} disabled={working} onPress={()=>changeTheme(option.id)} style={[st.selected,mode===option.id&&{borderWidth:1,borderColor:'#2762DF'}]}><Feather name={option.icon} size={17} color={theme.mode==='dark'?'#A8C4FF':'#2762DF'}/><Text style={[st.selectedText,theme.mode==='dark'&&{color:'#A8C4FF'}]}>{option.label}</Text>{mode===option.id&&<Feather name="check" size={16} color="#79A5FF"/>}</Pressable>)}</View></View></>}
+ {tab==='personal' && <><View style={st.card}><Text style={st.cardTitle}>Niveau de détail</Text><Text style={st.help}>Ce choix modifie le niveau de détail de vos prochaines réponses.</Text><View style={{flexDirection:'row',flexWrap:'wrap',gap:8}}>{[{id:'concise',label:'Concis'},{id:'balanced',label:'Équilibré'},{id:'detailed',label:'Détaillé'}].map(x=><Pressable key={x.id} onPress={()=>setLevel(x.id)} style={[st.selected,level===x.id&&{borderWidth:1,borderColor:'#2762DF'}]}><Text style={st.selectedText}>{x.label}</Text></Pressable>)}</View><Pressable disabled={!user||working} onPress={()=>saveProfile('level')} style={[st.primary,{alignSelf:'flex-start',marginTop:14}]}><Text style={st.primaryText}>Enregistrer le niveau</Text></Pressable></View><Text style={st.desc}>Définissez la manière dont vous souhaitez que Movibot vous réponde.</Text><View style={st.info}><Feather name="info" size={17} color="#2762DF"/><Text style={st.infoText}>Ces instructions sont enregistrées sur votre compte et transmises à l’agent lors des prochaines réponses.</Text></View><View style={st.card}><Text style={st.cardTitle}>Instructions personnalisées</Text><Text style={st.help}>Par exemple : « Réponds brièvement, évite les spoilers et privilégie les films en français. »</Text><TextInput accessibilityLabel="Instructions personnalisées" multiline value={prefs.instructions} onChangeText={v=>setPrefs({...prefs,instructions:v})} maxLength={1200} placeholder="Comment Movibot peut-il mieux vous aider ?" placeholderTextColor="#A4B1C2" style={st.textarea}/><View style={st.actions}><Text style={st.micro}>{prefs.instructions.length} / 1200</Text><Pressable disabled={working || !user} onPress={()=>save(prefs,'instructions')} style={st.primary}><Text style={st.primaryText}>Enregistrer</Text></Pressable></View></View></>}
+ {tab==='memory' && <><Text style={st.desc}>Gardez une trace de vos goûts pour des recommandations plus personnelles.</Text><View style={st.info}><Feather name="info" size={17} color="#2762DF"/><Text style={st.infoText}>Les souvenirs sont associés à votre compte. Activés, ils peuvent être utilisés dans vos prochaines discussions. N’enregistrez pas de données sensibles. Les anciens souvenirs locaux ne sont pas importés automatiquement.</Text></View><View style={st.card}><View style={st.row}><View style={{flex:1}}><Text style={st.cardTitle}>Préférence de mémoire</Text><Text style={st.help}>Autoriser Movibot à utiliser vos souvenirs. Désactiver la mémoire ne les supprime pas.</Text></View><Switch disabled={working || !user} accessibilityLabel="Préférence de mémoire" value={prefs.memoryEnabled} onValueChange={v=>save({...prefs,memoryEnabled:v},'memory')} trackColor={{true:'#91B4FA',false:'#DDE5EF'}} thumbColor={prefs.memoryEnabled?'#2762DF':'#fff'}/></View></View><View style={st.card}><Text style={st.cardTitle}>Mes souvenirs</Text><Text style={st.help}>Ajoutez ou retirez des souvenirs enregistrés sur votre compte.</Text>{prefs.memories.length===0?<Text style={st.empty}>Aucun souvenir pour le moment.</Text>:prefs.memories.map(m=><View key={m.memory_id} style={st.memoryRow}><Feather name="bookmark" size={16} color="#7394CD"/><Text style={{flex:1,color:'#465A77',fontSize:13}}>{m.content}</Text><Pressable disabled={working} accessibilityLabel="Supprimer ce souvenir" onPress={()=>deleteMemory(m.memory_id)}><Feather name="trash-2" size={16} color="#A3AEC0"/></Pressable></View>)}<View style={st.addRow}><TextInput accessibilityLabel="Nouveau souvenir" value={draft} onChangeText={setDraft} maxLength={160} placeholder="Ex. J’aime les films de science-fiction" placeholderTextColor="#A4B1C2" style={st.input}/><Pressable disabled={working || !user || !prefs.memoryEnabled} onPress={addMemory} style={st.primary}><Text style={st.primaryText}>Ajouter</Text></Pressable></View></View></>}
+ {tab==='data' && <><View style={st.card}><Text style={st.cardTitle}>Utilisation aujourd’hui</Text><Text style={st.help}>{usage ? `${usage.todayTokens} / ${usage.dailyLimit} unités de texte utilisées` : 'Consultez votre consommation et la limite quotidienne de votre compte.'}</Text><Pressable disabled={!user||working} onPress={loadUsage} style={[st.primary,{alignSelf:'flex-start',marginTop:14}]}><Text style={st.primaryText}>Actualiser</Text></Pressable></View><Text style={st.desc}>Gardez le contrôle sur vos discussions et vos données.</Text><View style={st.card}><Text style={st.cardTitle}>Supprimer toutes les discussions</Text><Text style={st.help}>Cette action supprime chaque discussion de votre compte sur le serveur. Elle est irréversible.</Text>{!user?<Text style={st.micro}>Connectez-vous pour gérer vos discussions.</Text>:confirm?<View style={st.confirm}><Text style={st.help}>Confirmer la suppression de toutes les discussions ?</Text><View style={st.actions}><Pressable onPress={()=>setConfirm(false)}><Text style={{color:'#788AA3'}}>Annuler</Text></Pressable><Pressable disabled={working} onPress={deleteAll} style={st.danger}><Text style={st.primaryText}>{working?'Suppression…':'Confirmer la suppression'}</Text></Pressable></View></View>:<Pressable onPress={()=>setConfirm(true)} style={st.outlineDanger}><Text style={st.dangerLink}>Supprimer les discussions</Text></Pressable>}</View></>}
+ {tab==='account' && <><Text style={st.desc}>Les informations associées à votre espace Movibot.</Text><View style={st.card}><Text style={st.cardTitle}>{user?.display_name || 'Mode aperçu'}</Text>{user && <><Text style={st.help}>Nom affiché</Text><TextInput accessibilityLabel="Nom affiché" value={name} onChangeText={setName} maxLength={80} style={[st.input,{minHeight:44,marginTop:8,color:theme.text}]}/><Pressable disabled={working||!name.trim()} onPress={()=>saveProfile('name')} style={[st.primary,{alignSelf:'flex-start',marginTop:10}]}><Text style={st.primaryText}>Enregistrer le profil</Text></Pressable></>}<Text style={st.help}>{user?.email || 'Connectez-vous pour retrouver vos discussions.'}</Text><Pressable onPress={async()=>{if(user){await signOut();router.replace('/')}else router.push('/auth')}} style={st.selected}><Feather name={user?'log-out':'log-in'} size={17} color="#2762DF"/><Text style={st.selectedText}>{user?'Se déconnecter':'Se connecter'}</Text></Pressable></View></>}
+ {!user && (tab==='memory'||tab==='personal') ? <Text style={st.notice}>Connectez-vous pour gérer ces paramètres.</Text> : null}{notice ? <Text accessibilityRole="alert" style={st.notice}>{notice}</Text>:null}</ScrollView></View></View></View>
 }
-
-const styles = StyleSheet.create({
-  content: { padding: space.lg, maxWidth: 640, width: '100%', alignSelf: 'center', paddingBottom: space.giant },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: space.xxl,
-    paddingBottom: space.md,
-  },
-  title: { fontSize: 24, fontWeight: '600' },
-  sectionTitle: { fontSize: 20, fontWeight: '600', marginTop: space.xl, marginBottom: space.md },
-  themeRow: { flexDirection: 'row', gap: space.md },
-  themeCard: {
-    flex: 1,
-    borderRadius: radius.card,
-    padding: space.md,
-    alignItems: 'center',
-    gap: space.sm,
-  },
-  themePreview: { width: '100%', height: 60, borderRadius: radius.field, justifyContent: 'flex-end', overflow: 'hidden' },
-  themePreviewBar: { height: 8, width: '60%', margin: space.sm, borderRadius: 4 },
-  card: { borderRadius: radius.card, borderWidth: 1, paddingHorizontal: space.lg },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: space.md,
-  },
-  signOut: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: space.sm,
-    marginTop: space.xxl,
-    height: 50,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-  },
-});
+const lightStyles=StyleSheet.create({root:{flex:1,backgroundColor:'#F7F9FD'},shell:{flex:1,width:'100%',maxWidth:1200,alignSelf:'center'},header:{height:95,flexDirection:'row',alignItems:'center',gap:16,paddingHorizontal:24,borderBottomWidth:1,borderBottomColor:'#E8EEF6'},back:{width:42,height:42,borderRadius:12,backgroundColor:'#fff',alignItems:'center',justifyContent:'center',borderWidth:1,borderColor:'#E9EEF6'},heading:{fontFamily:'Manrope_700Bold',fontSize:22,color:'#192B4C'},sub:{fontFamily:'Manrope_500Medium',fontSize:12,color:'#96A5B9',marginTop:3},layout:{flex:1,flexDirection:'row'},nav:{width:245,padding:20,gap:5},navItem:{flexDirection:'row',alignItems:'center',gap:11,paddingHorizontal:13,paddingVertical:13,borderRadius:10},navActive:{backgroundColor:'#E9F1FF'},navText:{fontFamily:'Manrope_600SemiBold',fontSize:12,color:'#71829B'},content:{width:'100%',maxWidth:720,paddingHorizontal:26,paddingTop:35,paddingBottom:80},eyebrow:{fontFamily:'Manrope_700Bold',fontSize:10,letterSpacing:1.3,color:'#7A9ACD'},title:{fontFamily:'Manrope_700Bold',fontSize:27,color:'#192B4C',marginTop:8},desc:{fontFamily:'Manrope_500Medium',fontSize:13,lineHeight:22,color:'#8A9AB0',marginTop:7,marginBottom:25},card:{backgroundColor:'#fff',borderWidth:1,borderColor:'#E9EEF6',borderRadius:16,padding:22,marginBottom:15},cardTitle:{fontFamily:'Manrope_700Bold',fontSize:14,color:'#2A3F60'},help:{fontFamily:'Manrope_500Medium',fontSize:12,lineHeight:20,color:'#8C9AAF',marginTop:7},selected:{flexDirection:'row',alignItems:'center',gap:10,backgroundColor:'#F3F7FF',padding:13,borderRadius:10,marginTop:18,alignSelf:'flex-start'},selectedText:{fontFamily:'Manrope_700Bold',fontSize:12,color:'#3669CA'},micro:{fontFamily:'Manrope_500Medium',fontSize:11,color:'#A0ADBF',marginTop:12},info:{flexDirection:'row',gap:10,padding:15,backgroundColor:'#EDF4FF',borderRadius:12,marginBottom:15},infoText:{flex:1,fontFamily:'Manrope_500Medium',fontSize:12,lineHeight:19,color:'#52709B'},textarea:{minHeight:135,textAlignVertical:'top',marginTop:17,borderWidth:1,borderColor:'#E2EAF5',borderRadius:10,padding:13,fontSize:13,color:'#304564',outlineStyle:'none'} as any,actions:{flexDirection:'row',alignItems:'center',justifyContent:'flex-end',gap:14,marginTop:12},primary:{backgroundColor:'#2762DF',paddingHorizontal:17,paddingVertical:11,borderRadius:9},primaryText:{fontFamily:'Manrope_700Bold',fontSize:12,color:'#fff'},row:{flexDirection:'row',alignItems:'center',gap:12},empty:{fontSize:12,color:'#A0ADBF',marginVertical:20},memoryRow:{flexDirection:'row',gap:10,alignItems:'center',paddingVertical:12,borderBottomWidth:1,borderColor:'#EDF1F7'},addRow:{flexDirection:'row',gap:8,marginTop:14},input:{flex:1,borderWidth:1,borderColor:'#E2EAF5',borderRadius:9,paddingHorizontal:12,fontSize:12,color:'#304564',outlineStyle:'none'} as any,dangerLink:{color:'#C04E5B',fontFamily:'Manrope_600SemiBold',fontSize:12,marginTop:15},outlineDanger:{alignSelf:'flex-start'},confirm:{marginTop:15,padding:12,backgroundColor:'#FFF6F6',borderRadius:10},danger:{backgroundColor:'#C04E5B',padding:10,borderRadius:9},notice:{fontFamily:'Manrope_600SemiBold',fontSize:12,color:'#39765D',marginTop:4}});

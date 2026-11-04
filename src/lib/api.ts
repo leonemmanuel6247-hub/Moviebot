@@ -93,9 +93,12 @@ export type Conversation = {
   created_at: string;
   updated_at: string;
   archived: string | boolean;
+  has_messages?: boolean;
 };
 
+export type ToolEvent = {type: string; status: string; label: string};
 export type Message = {
+  tool_events?: ToolEvent[];
   msg_id: string;
   conv_id: string;
   role: 'user' | 'assistant';

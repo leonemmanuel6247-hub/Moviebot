@@ -39,3 +39,11 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Livraisons obsolètes et archives locales
+/AppsScript-a-remplacer/
+/apps-script-movibot/
+/Movibot-Apps-Script.zip
+/Movibot-AppsScript-corrections.zip
+.vercel/
+.env
